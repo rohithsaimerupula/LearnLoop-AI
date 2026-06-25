@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  password       String?   // Optional because Supabase Auth handles OAuth too
+  name           String
+  role           Role      @default(STUDENT)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Gamification Fields
+  xp             Int       @default(0)
+  coins          Int       @default(0)
+  level          Int       @default(1)
+  currentStreak  Int       @default(0)
+  longestStreak  Int       @default(0)
+  lastActiveDate DateTime?
+
+  groups         GroupMember[]
+  messages       Message[]
+  resources      Resource[]
+  badges         UserBadge[]
+  challenges     UserChallenge[]
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+  SUPER_ADMIN
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isPrivate   Boolean  @default(false)
+  preferredAI AIModel  @default(OPENAI) // Multi-AI integration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members   GroupMember[]
+  messages  Message[]
+  resources Resource[]
+}
+
+enum AIModel {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  LOCAL
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  userId    String
+  groupId   String
+  role      GroupRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+enum GroupRole {
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  type      MessageType @default(TEXT)
+  senderId  String
+  groupId   String
+  isAiResponse Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sender User  @relation(fields: [senderId], references: [id])
+  group  Group @relation(fields: [groupId], references: [id])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  VOICE
+  CODE
+}
+
+model Resource {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  type      ResourceType
+  uploaderId String
+  groupId   String
+  createdAt DateTime @default(now())
+
+  uploader User  @relation(fields: [uploaderId], references: [id])
+  group    Group @relation(fields: [groupId], references: [id])
+}
+
+enum ResourceType {
+  PDF
+  IMAGE
+  VIDEO
+  NOTE
+  WHITEBOARD
+}
+
+// Gamification Models
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  iconUrl     String
+  xpReward    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  users       UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  badge Badge @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+}
+
+model DailyChallenge {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  xpReward    Int
+  coinReward  Int
+  targetCount Int      // E.g., answer 5 questions
+  date        DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+
+  users       UserChallenge[]
+}
+
+model UserChallenge {
+  id           String   @id @default(uuid())
+  userId       String
+  challengeId  String
+  progress     Int      @default(0)
+  isCompleted  Boolean  @default(false)
+  completedAt  DateTime?
+
+  user      User           @relation(fields: [userId], references: [id])
+  challenge DailyChallenge @relation(fields: [challengeId], references: [id])
+
+  @@unique([userId, challengeId])
+}
